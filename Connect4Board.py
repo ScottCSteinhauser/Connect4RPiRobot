@@ -1,20 +1,31 @@
 import random
+import math
 
 class Connect4Board:
     board = 0  # All board pieces represented as a 42 bit integer, 0 represents empty board
     player1Pieces = 0  # Similar to the above, but only represents the pieces of player 1
     # player2Pieces is always board ^ player1Pieces (xor operator)
     numPieces = 0
+
     vertWinCheck = 0
     horWinCheck = 0
-
     diagWinCheckUR = 0
+    diagWinCheckDL = 0
 
 
     def __init__(self):
-        board = 0
-        player1Pieces = 0
-        numPieces = 0
+        self.board = 0
+        self.player1Pieces = 0
+        self.numPieces = 0
+        for i in range(21):
+            self.vertWinCheck += (1 << (i + (i+3)//3 * 3))
+        for i in range(24):
+            self.horWinCheck += (1 << (18 + i))
+        for i in range(24):
+            if (i // 3) % 2 == 1:
+                self.diagWinCheckUR += (1 << (18 + i))
+            else:
+                self.diagWinCheckDL += (1 << (18 + i))
 
     def boardToString(self):
         rows = []
@@ -114,45 +125,31 @@ class Connect4Board:
             pieces = player1Pieces
         else:
             pieces = player1Pieces ^ board
-        verticalWin = 15
-        horizontalWin = 1 + (1 << 6) + (1 << 12) + (1 << 18)
-        diagonalWinUR = 1 + (1 << 7) + (1 << 14) + (1 << 21)
-        diagonalWinDL = 8 + (1 << 8) + (1 << 13) + (1 << 18)
-        # check for vertical win
-        p = 0
-        for i in range(21):
-            curWin = verticalWin << p
-            if curWin & pieces == curWin:
-                return True
-            p += 1
-            if (i + 1) % 3 == 0:
-                p += 3
-        # check for horizontal win
-        p = 0
-        for i in range(24):
-            curWin = horizontalWin << p
-            if curWin & pieces == curWin:
-                return True
-            p += 1
-        # check for diagonal win up right
-        p = 0
-        for i in range(12):
-            curWin = diagonalWinUR << p
-            if curWin & pieces == curWin:
-                return True
-            p += 1
-            if (i + 1) % 3 == 0:
-                p += 3
-        # check for diagonal win down left
-        p = 0
-        for i in range(12):
-            curWin = diagonalWinDL << p
-            if curWin & pieces == curWin:
-                return True
-            p += 1
-            if (i + 1) % 3 == 0:
-                p += 3
-        # No wins detected. Return false.
+
+        # Vertical win
+        d = pieces & (pieces << 1)
+        win = d & (d << 2) & self.vertWinCheck
+        if win > 0:
+            return True
+
+        # Horizontal Win
+        d = pieces & (pieces << 6)
+        win = d & (d << 12) & self.horWinCheck
+        if win > 0:
+            return True
+
+        # Diagonal Win Up-Right
+        d = pieces & (pieces << 7)
+        win = d & (d << 14) & self.diagWinCheckUR
+        if win > 0:
+            return True
+
+        # Diagonal Win Down-Left
+        d = pieces & (pieces << 5)
+        win = d & (d << 10) & self.diagWinCheckDL
+        if win > 0:
+            return True
+
         return False
 
     def simulateGame(self, board):
@@ -196,6 +193,8 @@ class Connect4Board:
 
 iterations = 500
 b = Connect4Board()
+print(b.boardToString())
+
 while True:
     move = int(input("Make a move: "))
     b.makeMove(move)
