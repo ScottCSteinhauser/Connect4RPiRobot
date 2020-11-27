@@ -103,9 +103,9 @@ def getBoardState(cameraIsOn = True):
     #print(differences)
     curBoardState = [x for x in boardState]
     for i in range(7):
-        if curBoardState[i] == 6:
+        if curBoardState[i] >= 6:
             continue
-        if (differences[5-curBoardState[i]][i]) > 400:
+        if (differences[5-curBoardState[i]][i]) > 600:
             curBoardState[i]+=1
     if not cameraIsOn:
         camera.stop_preview()
@@ -114,6 +114,7 @@ def getBoardState(cameraIsOn = True):
 def processMove(game, move, cameraIsOn = True):
     GPIO.output(lightPin, GPIO.LOW)
     game.makeMove(move)
+    print("Player 1 move simulated")
     counterMove = game.AImakeMove(iterations)
     activateSolenoid(counterMove)
     print(game.boardToString())
