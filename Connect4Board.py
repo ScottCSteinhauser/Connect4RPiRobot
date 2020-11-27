@@ -185,29 +185,28 @@ class Connect4Board:
                 bestAction = i
         print(moveData)
         self.makeMove(bestAction)
+        return bestAction
 
 
 
 
 
-
-iterations = 500
-b = Connect4Board()
-print(b.boardToString())
-
-while True:
-    move = int(input("Make a move: "))
-    b.makeMove(move)
-    b.AImakeMove(iterations)
+if __name__ == "__main__":
+    iterations = 500
+    b = Connect4Board()
     print(b.boardToString())
 
-    if b.checkForWin(1):
-        print("You Win!")
-        break
-    elif b.checkForWin(2):
-        print("You Lost :(")
-        break
+    while True:
+        move = int(input("Make a move: "))
+        b.makeMove(move)
+        b.AImakeMove(iterations)
+        print(b.boardToString())
 
-
+        if b.checkForWin(1):
+            print("You Win!")
+            break
+        elif b.checkForWin(2):
+            print("You Lost :(")
+            break
 
 

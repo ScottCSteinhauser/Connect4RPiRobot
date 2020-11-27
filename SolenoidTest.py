@@ -12,9 +12,8 @@ GPIO.setmode(GPIO.BCM)
 
 pinNums = [15,18,23,24,25,8,7]
 sleepTime = 0.15
-sleepTimes = [0.15] * 7
-sleepTimes[4] = 0.15
-sleepTimes[5] = 0.15
+sleepTimes = [0.15,0.15,0.12,0.15,0.15,0.15,0.17]
+
 
 for p in pinNums:
     GPIO.setup(p, GPIO.OUT)

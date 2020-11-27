@@ -8,29 +8,41 @@ import matplotlib.pyplot as plt
 from matplotlib import image
 import RPi.GPIO as GPIO
 import time
+from Connect4Board import *
 
 GPIO.setmode(GPIO.BCM)
 
-pinNums = [15,18,23,24,25,8,7]
+pinNums = [7,8,25,24,23,18,15]
 sleepTime = 0.15
-sleepTimes = [0.15] * 7
-sleepTimes[4] = 0.15
-sleepTimes[5] = 0.15
+sleepTimes = [0.17,0.15,0.15,0.15,0.12,0.15,0.15]
+lightPin = 16
+
+iterations = 500 # number of monte carlo simulations per move, increases AI difficulty and runtime
 
 """
 Hardcoded positions of game piece hole references.
 """
-refPtLD = (350, 870)
-refPtRD = (1650, 870)
-refPtLU = (450, 130)
-refPtRU = (1550, 110)
+refPtLD = (400, 950)
+refPtRD = (1650, 910)
+refPtLU = (435, 130)
+refPtRU = (1570, 90)
+blockSize = 100
 
 """
 Interpolate to get all positions
 """
 gamePositions = [[(0,0) for i in range(7)] for j in range(6)]
 gameHoleReferences = [[(0,0,0) for i in range(7)] for j in range(6)]
-print(gamePositions)
+boardState = [0]*7
+prevBoardState1 = [0]*7
+prevBoardState2 = [0]*7
+
+for p in pinNums:
+    GPIO.setup(p, GPIO.OUT)
+    GPIO.output(p, GPIO.HIGH)
+    time.sleep(sleepTime)
+GPIO.setup(lightPin, GPIO.OUT)
+GPIO.output(lightPin, GPIO.LOW)
 
 def fillGamePositions():
     gamePositions[0][0] = refPtLU
@@ -55,10 +67,7 @@ def fillGamePositions():
 fillGamePositions()
 
 
-for p in pinNums:
-    GPIO.setup(p, GPIO.OUT)
-    time.sleep(sleepTime)
-    GPIO.output(p, GPIO.HIGH)
+
 
 def activateSolenoid(solenoid):
     inp = solenoid
@@ -66,20 +75,63 @@ def activateSolenoid(solenoid):
     time.sleep(sleepTimes[inp%7])
     GPIO.output(pinNums[inp % 7], GPIO.HIGH)
 
-def calibrateBoardHoles(img):
+def getBoardHoleValues(img):
+    values = [[(0,0,0) for i in range(7)] for j in range(6)]
     for i in range(6):
         for j in range(7):
             x = gamePositions[i][j][0]
             y = gamePositions[i][j][1]
-            print(x,y)
+            avgR = np.average(img[y-blockSize//2:y+blockSize//2, x-blockSize//2:x+blockSize//2, 0])
+            avgG = np.average(img[y-blockSize//2:y+blockSize//2, x-blockSize//2:x+blockSize//2, 1])
+            avgB = np.average(img[y-blockSize//2:y+blockSize//2, x-blockSize//2:x+blockSize//2, 2])
+            values[i][j] = (avgR, avgG, avgB)
+            #print(x,y,values[i][j])
+    return values
 
-def getBoardState():
+def getBoardState(cameraIsOn = True):
+    if not cameraIsOn:
+        camera.start_preview()
+        sleep(2)
     camera.capture('/home/pi/mu_code/Connect4RPiRobot/image.jpg')
+    img = image.imread('/home/pi/mu_code/Connect4RPiRobot/image.jpg')
+    values = getBoardHoleValues(img)
+    differences = [[0 for i in range(7)] for j in range(6)]
+    for i in range(6):
+        for j in range(7):
+            for k in range(3):
+                differences[i][j] += abs(values[i][j][k] - gameHoleReferences[i][j][k])**2
+    #print(differences)
+    curBoardState = [x for x in boardState]
+    for i in range(7):
+        if curBoardState[i] == 6:
+            continue
+        if (differences[5-curBoardState[i]][i]) > 400:
+            curBoardState[i]+=1
+    if not cameraIsOn:
+        camera.stop_preview()
+    return curBoardState
 
+def processMove(game, move, cameraIsOn = True):
+    GPIO.output(lightPin, GPIO.LOW)
+    game.makeMove(move)
+    counterMove = game.AImakeMove(iterations)
+    activateSolenoid(counterMove)
+    print(game.boardToString())
+    boardState[move]+=1
+    boardState[counterMove]+=1
+    print(move, counterMove)
+    GPIO.output(lightPin, GPIO.HIGH)
+    # stretch - add function to detect if move was succesful
+
+def flashLight():
+    for i in range(10):
+        GPIO.output(lightPin, GPIO.HIGH)
+        sleep(0.2)
+        GPIO.output(lightPin, GPIO.LOW)
+        sleep(0.2)
 
 
 camera = PiCamera()
-camera.rotation = 180
 
 """
 Primary algorithm pseudo code:
@@ -96,32 +148,53 @@ while True:
 """
 camera.start_preview()
 sleep(3)
-camera.capture('/home/pi/mu_code/Connect4RPiRobot/image.jpg')
-camera.stop_preview()
-sleep(1)
-
-img = image.imread('/home/pi/mu_code/Connect4RPiRobot/image.jpg')
-print(img)
-print(len(img))
-print(len(img[0]))
-print(type(img))
+camera.capture('/home/pi/mu_code/Connect4RPiRobot/imageR.jpg')
+img = image.imread('/home/pi/mu_code/Connect4RPiRobot/imageR.jpg')
 a = np.copy(img)
-blockSize = 100
+
+gameHoleReferences = getBoardHoleValues(a)
+
+
+game = Connect4Board()
+
+GPIO.output(lightPin, GPIO.HIGH)
+
+while True:
+    inp = "bs"
+    if inp == "bs":
+        b = getBoardState(True)
+        sleep(0.1)
+        if b == prevBoardState1 == prevBoardState2 and b != boardState:
+            #get action
+            action = -1
+            for i in range(7):
+                if b[i] != boardState[i]:
+                    action = i
+            processMove(game, action)
+            print("Move in", action, "th column detected")
+        else:
+            prevBoardState2 = [x for x in prevBoardState1]
+            prevBoardState1 = [x for x in b]
+        print(b)
+        print(boardState)
+        if game.checkForWin(1):
+            print("Player 1 Wins!")
+            flashLight()
+            break
+        elif game.checkForWin(2):
+            print("Player 2 Wins!")
+            flashLight()
+            break
+
+camera.stop_preview()
+
+"""
 for i in range(6):
     for j in range(7):
         x = gamePositions[i][j][0]
         y = gamePositions[i][j][1]
-        print(x,y)
-        #a[y - blockSize//2:y + blockSize//2,x - blockSize//2:x + blockSize//2] = [255,255,255]
+        a[y - blockSize//2:y + blockSize//2,x - blockSize//2:x + blockSize//2] = [255,255,255]
 
 plt.imshow(a)
 plt.show()
-
-
-
-
-
-
-
-
-
+"""
